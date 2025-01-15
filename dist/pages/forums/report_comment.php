@@ -1,6 +1,7 @@
 <?php require __DIR__ . '/../parts/init.php';
-$title = "留言管理"; // 這個變數可修改，用在<head>的標題
+$title = "檢舉列表(留言)"; // 這個變數可修改，用在<head>的標題
 $pageName = "demo"; // 這個變數可修改，用在sidebar的按鈕active
+
 
 $perPage = 25; # 每一頁有幾筆
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
@@ -18,14 +19,16 @@ if ($keyword) {
   $where .= " AND (
     comments.body LIKE $keyword_ OR
     users.user_name LIKE $keyword_ OR
-    comments.status LIKE $keyword_ OR
-    comments.created_at LIKE $keyword_ OR
-    comments.updated_at LIKE $keyword_
+    reporters.user_name LIKE $keyword_ OR
+    reports.status LIKE $keyword_ OR
+    reports.created_at LIKE $keyword_
   )";
 }
 
-$t_sql = "SELECT COUNT(1) FROM comments
+$t_sql = "SELECT COUNT(1) FROM reports
+          JOIN comments ON reports.target_id = comments.id
           JOIN users ON comments.user_id = users.user_id
+          JOIN users AS reporters ON reports.reporter_id = reporters.user_id
           $where";
 
 # 總筆數
@@ -39,16 +42,21 @@ if ($totalRows > 0) {
     exit;
   }
 
-  # 取得該分頁的評論資料
-  $sql = sprintf("SELECT comments.*, users.user_name
-                  FROM comments
-                  JOIN users ON comments.user_id = users.user_id
-                  %s
-                  ORDER BY comments.created_at DESC, comments.id DESC
-                  LIMIT %s, %s",
-                  $where, ($page - 1) * $perPage, $perPage);
+  # 取得該分頁的檢舉資料
+  $sql = sprintf(
+    "SELECT reports.*, comments.user_id AS reports_user_id, comments.body AS reports_body, users.user_name AS reports_user_name, reporters.user_name AS target_name
+    FROM reports
+    JOIN comments ON reports.target_id = comments.id
+    JOIN users ON comments.user_id = users.user_id
+    JOIN users AS reporters ON reports.reporter_id = reporters.user_id
+    %s
+    ORDER BY reports.created_at DESC, reports.id DESC
+    LIMIT %s, %s",
+    $where, ($page - 1) * $perPage, $perPage
+  );
   $rows = $pdo->query($sql)->fetchAll();
 }
+
 $pageRange = 2;
 $startPage = max($page - $pageRange, 1);
 $endPage = min($page + $pageRange, $totalPages);
@@ -60,44 +68,10 @@ if ($startPage > 1) {
 if ($endPage < $totalPages) {
     $endPage = min($endPage, $totalPages - 1);
 }
+
+
 ?>
 <?php include ROOT_PATH . 'dist/pages/parts/head.php' ?>
-<!--begin::Body-->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script>
-$(document).ready(function() {
-  $('.status-select').change(function() {
-    var select = $(this);
-    var commentId = select.data('comment-id');
-    var newStatus = select.val();
-    var originalStatus = select.data('original-status');
-
-    if (confirm('您確定要更改留言狀態嗎？')) {
-      $.ajax({
-        url: 'update_comment_status.php',
-        method: 'POST',
-        data: { comment_id: commentId, status: newStatus },
-        dataType: 'json',
-        success: function(response) {
-          if (response.status === 'success') {
-            alert('狀態已更新');
-            select.data('original-status', newStatus);
-          } else {
-            alert('更新失敗：' + response.message);
-            select.val(originalStatus);
-          }
-        },
-        error: function() {
-          alert('發生錯誤，請稍後再試');
-          select.val(originalStatus);
-        }
-      });
-    } else {
-      select.val(originalStatus);
-    }
-  });
-});
-</script>
 
 <style>
 .custom-pagination-container {
@@ -195,6 +169,7 @@ $(document).ready(function() {
     height: 100%; /* 確保高度與其他按鈕一致 */
 }
 </style>
+<!--begin::Body-->
 
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
   <!--begin::App Wrapper 網頁的主要內容在這-->
@@ -210,6 +185,7 @@ $(document).ready(function() {
     <main class="app-main pt-5">
     <div class="container">
   <div class="row mt-2">
+
     <div class="col-6"></div>
     <div class="col-6">
   <form class="d-flex" role="search" id="searchForm">
@@ -217,58 +193,54 @@ $(document).ready(function() {
       id="searchInput"
       name="keyword"
       value="<?= empty($_GET['keyword']) ? '' : htmlentities($_GET['keyword']) ?>"
-      type="search" placeholder="搜尋留言內容、作者、狀態等" aria-label="Search">
+      type="search" placeholder="搜尋留言內容、被檢舉人、檢舉人等" aria-label="Search">
     <button class="btn btn-outline-primary" type="submit">Search</button>
   </form>
 </div>
-<div class="custom-pagination-container">
-    <nav aria-label="Page navigation" class="custom-pagination">
-        <ul class="pagination">
-            <li class="page-item <?= $page == 1 ? 'disabled' : '' ?>">
-                <a class="page-link" href="?<?php $qs['page'] = 1; echo http_build_query($qs); ?>" aria-label="First">
-                    第一頁
-                </a>
-            </li>
-            <li class="page-item <?= $page == 1 ? 'disabled' : '' ?>">
-                <a class="page-link prev-page" href="?<?php $qs['page'] = max(1, $page - 1); echo http_build_query($qs); ?>" aria-label="Previous">
-                    <span class="triangle-left"></span>
-                </a>
-            </li>
+  </div>
 
-            <?php if ($startPage > 1): ?>
-                <li class="page-item"><a class="page-link" href="?<?php $qs['page'] = 1; echo http_build_query($qs); ?>">1</a></li>
-                <?php if ($startPage > 2): ?>
-                    <li class="page-item disabled"><span class="page-link">...</span></li>
-                <?php endif; ?>
-            <?php endif; ?>
+  <div class="row mt-2">
+    <div class="col">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="flex-grow-1 text-center">
+                <nav aria-label="Page navigation" class="custom-pagination">
+                    <ul class="pagination justify-content-center mb-0">
+                        <!-- 分頁按鈕 -->
+                        <li class="page-item <?= $page == 1 ? 'disabled' : '' ?>">
+                            <a class="page-link" href="?<?php $qs['page'] = 1; echo http_build_query($qs); ?>" aria-label="First">
+                                第一頁
+                            </a>
+                        </li>
+                        <li class="page-item <?= $page == 1 ? 'disabled' : '' ?>">
+                            <a class="page-link prev-page" href="?<?php $qs['page'] = max(1, $page - 1); echo http_build_query($qs); ?>" aria-label="Previous">
+                                <span class="triangle-left"></span>
+                            </a>
+                        </li>
 
-            <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
-                <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                    <a class="page-link" href="?<?php $qs['page'] = $i; echo http_build_query($qs); ?>"><?= $i ?></a>
-                </li>
-            <?php endfor; ?>
+                        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                            <li class="page-item <?= $i == $page ? 'active' : '' ?>">
+                                <a class="page-link" href="?<?php $qs['page'] = $i; echo http_build_query($qs); ?>"><?= $i ?></a>
+                            </li>
+                        <?php endfor; ?>
 
-            <?php if ($endPage < $totalPages): ?>
-                <?php if ($endPage < $totalPages - 1): ?>
-                    <li class="page-item disabled"><span class="page-link">...</span></li>
-                <?php endif; ?>
-                <li class="page-item"><a class="page-link" href="?<?php $qs['page'] = $totalPages; echo http_build_query($qs); ?>"><?= $totalPages ?></a></li>
-            <?php endif; ?>
-
-            <li class="page-item <?= $page == $totalPages ? 'disabled' : '' ?>">
-                <a class="page-link next-page" href="?<?php $qs['page'] = min($totalPages, $page + 1); echo http_build_query($qs); ?>" aria-label="Next">
-                    <span class="triangle-right"></span>
-                </a>
-            </li>
-            <li class="page-item <?= $page == $totalPages ? 'disabled' : '' ?>">
-                <a class="page-link" href="?<?php $qs['page'] = $totalPages; echo http_build_query($qs); ?>" aria-label="Last">
-                    最後一頁
-                </a>
-            </li>
-        </ul>
-    </nav>
-    <div class="pagination-info">
-        第 <?= $page ?> 頁，共 <?= $totalPages ?> 頁
+                        <li class="page-item <?= $page == $totalPages ? 'disabled' : '' ?>">
+                            <a class="page-link next-page" href="?<?php $qs['page'] = min($totalPages, $page + 1); echo http_build_query($qs); ?>" aria-label="Next">
+                                <span class="triangle-right"></span>
+                            </a>
+                        </li>
+                        <li class="page-item <?= $page == $totalPages ? 'disabled' : '' ?>">
+                            <a class="page-link" href="?<?php $qs['page'] = $totalPages; echo http_build_query($qs); ?>" aria-label="Last">
+                                最後一頁
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            <div class="d-flex">
+                <a href="/midtern/dist/pages/forums/report.php" class="btn btn-primary me-2">貼文檢舉</a>
+                <a href="/midtern/dist/pages/forums/report_comment.php" class="btn btn-primary">留言檢舉</a>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -278,12 +250,12 @@ $(document).ready(function() {
         <thead>
           <tr>
           <th>#</th>
-            <th>留言內容</th>
-            <th>作者id</th>
-            <th>作者暱稱</th>
-            <th>按讚數</th>
-            <th>建立時間</th>
-            <th>更新時間</th>
+            <th>被檢舉留言</th>
+            <th>被檢舉人id</th>
+            <th>被檢舉人暱稱</th>
+            <th>檢舉人id</th>
+            <th>檢舉人暱稱</th>
+            <th>檢舉時間</th>
             <th>狀態</th>
           </tr>
         </thead>
@@ -291,20 +263,15 @@ $(document).ready(function() {
           <?php foreach ($rows as $r): ?>
             <tr>
               <td><?= $r['id'] ?></td>
-              <td><?= htmlentities($r['body']) ?></td>
-              <td><?= htmlentities($r['user_id']) ?></td>
-              <td><?= htmlentities($r['user_name']) ?></td>
-              <td><?= $r['likes_count'] ?></td>
-              <td><?= $r['created_at'] ?></td>
-              <td><?= $r['updated_at'] ?></td>
-              <td>
-                <select class="form-select status-select" data-comment-id="<?= $r['id'] ?>" data-original-status="<?= $r['status'] ?>">
-                <option value="已留言" <?= $r['status'] == '已留言' ? 'selected' : '' ?>>已留言</option>
-                <option value="被檢舉" <?= $r['status'] == '被檢舉' ? 'selected' : '' ?>>被檢舉</option>
-                <option value="已刪除" <?= $r['status'] == '已刪除' ? 'selected' : '' ?>>已刪除</option>
-              </select>
-              </td>
+              <td><?= htmlentities($r['reports_body']) ?></td>
+              <td><?= htmlentities($r['reports_user_id']) ?></td>
+              <td><?= htmlentities($r['reports_user_name']) ?></td>
+              <td><?= htmlentities($r['reporter_id']) ?></td>
+              <td><?= htmlentities($r['target_name']) ?></td>
+              <td><?= htmlentities($r['created_at']) ?></td>
+              <td><?= htmlentities($r['status']) ?></td>
             </tr>
+
           <?php endforeach; ?>
         </tbody>
       </table>
@@ -364,7 +331,6 @@ $(document).ready(function() {
       }
     });
   </script>
-  <!--end::OverlayScrollbars Configure-->
   <script>
 document.addEventListener('DOMContentLoaded', function() {
   const searchInput = document.getElementById('searchInput');
@@ -374,41 +340,21 @@ document.addEventListener('DOMContentLoaded', function() {
     searchInput.addEventListener('search', function(event) {
       if (this.value === '') {
         event.preventDefault();
-        window.location.href = 'comment.php';
+        window.location.href = 'report_comment.php';
       }
     });
 
     searchForm.addEventListener('submit', function(event) {
       if (searchInput.value.trim() === '') {
         event.preventDefault();
-        window.location.href = 'comment.php';
+        window.location.href = 'report_comment.php';
       }
     });
   }
 });
 </script>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const searchInput = document.getElementById('searchInput');
-  const searchForm = document.getElementById('searchForm');
+  <!--end::OverlayScrollbars Configure-->
 
-  if (searchInput && searchForm) {
-    searchInput.addEventListener('search', function(event) {
-      if (this.value === '') {
-        event.preventDefault();
-        window.location.href = 'comment.php';
-      }
-    });
-
-    searchForm.addEventListener('submit', function(event) {
-      if (searchInput.value.trim() === '') {
-        event.preventDefault();
-        window.location.href = 'comment.php';
-      }
-    });
-  }
-});
-</script>
   <!--end::Script-->
 </body>
 <!--end::Body-->

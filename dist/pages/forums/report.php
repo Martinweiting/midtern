@@ -1,73 +1,173 @@
 <?php require __DIR__ . '/../parts/init.php';
-$title = "檢舉列表"; // 這個變數可修改，用在<head>的標題
+$title = "檢舉列表(貼文)"; // 這個變數可修改，用在<head>的標題
 $pageName = "demo"; // 這個變數可修改，用在sidebar的按鈕active
 
 $perPage = 25; # 每一頁有幾筆
-
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 if ($page < 1) {
-  header('Location: ?page=1'); # 跳轉頁面 (後端), 也稱為 redirect (轉向)
-  exit; # 離開 (結束) 程式 (以下的程式都不會執行)
-  die(); # 同 exit 的功能, 但可以回傳字串或編號
+  header('Location: ?page=1');
+  exit;
 }
 
 $keyword = empty($_GET['keyword']) ? '' : $_GET['keyword'];
-$birth_begin = empty($_GET['birth_begin']) ? '' : $_GET['birth_begin'];
-$birth_end = empty($_GET['birth_end']) ? '' : $_GET['birth_end'];
 
 $where = ' WHERE 1 '; # SQL 條件的開頭
 
 if ($keyword) {
-  $keyword_ = $pdo->quote("%{$keyword}%"); # 字串內容做 SQL 引號的跳脫, 同時前後標單引號
-  $where .= " AND ( name LIKE $keyword_ OR mobile LIKE $keyword_ ) ";
-}
-if ($birth_begin) {
-  $t = strtotime($birth_begin); # 把日期字串轉換成 timestamp
-  if ($t !== false) {
-    $where .= sprintf(" AND birthday >= '%s' ",   date('Y-m-d', $t));
-  }
-}
-if ($birth_end) {
-  $t = strtotime($birth_end); # 把日期字串轉換成 timestamp
-  if ($t !== false) {
-    $where .= sprintf(" AND birthday <= '%s' ",   date('Y-m-d', $t));
-  }
+  $keyword_ = $pdo->quote("%{$keyword}%");
+  $where .= " AND (
+    posts.title LIKE $keyword_ OR
+    users.user_name LIKE $keyword_ OR
+    reporters.user_name LIKE $keyword_ OR
+    reports.status LIKE $keyword_ OR
+    reports.created_at LIKE $keyword_
+  )";
 }
 
-$t_sql = "SELECT COUNT(1) FROM `reports` $where";
+$t_sql = "SELECT COUNT(1) FROM reports
+          JOIN posts ON reports.target_id = posts.id
+          JOIN users ON posts.user_id = users.user_id
+          JOIN users AS reporters ON reports.reporter_id = reporters.user_id
+          $where";
 
 # 總筆數
 $totalRows = $pdo->query($t_sql)->fetch(PDO::FETCH_NUM)[0];
 # 總頁數
 $totalPages = ceil($totalRows / $perPage);
-$rows = []; # 設定預設值
+
 if ($totalRows > 0) {
   if ($page > $totalPages) {
-    # 用戶要看的頁碼超出範圍, 跳到最後一頁
     header('Location: ?page=' . $totalPages);
     exit;
   }
-}
 
-  # 取第一頁的資料
+  # 取得該分頁的檢舉資料
   $sql = sprintf(
     "SELECT reports.*, posts.user_id AS reports_user_id, posts.title AS reports_title, users.user_name AS reports_user_name, reporters.user_name AS target_name
     FROM reports
     JOIN posts ON reports.target_id = posts.id
     JOIN users ON posts.user_id = users.user_id
     JOIN users AS reporters ON reports.reporter_id = reporters.user_id
-
-    ORDER BY is_pinned, id
+    %s
+    ORDER BY reports.created_at DESC, reports.id DESC
     LIMIT %s, %s",
-    ($page - 1) * $perPage, $perPage
+    $where, ($page - 1) * $perPage, $perPage
   );
+  $rows = $pdo->query($sql)->fetchAll();
+}
 
-$rows = $pdo->query($sql)->fetchAll(); # 取得該分頁的文章資料
+$pageRange = 2;
+$startPage = max($page - $pageRange, 1);
+$endPage = min($page + $pageRange, $totalPages);
 
-
+// 確保始終顯示第一頁和最後一頁
+if ($startPage > 1) {
+    $startPage = max($startPage, 2);
+}
+if ($endPage < $totalPages) {
+    $endPage = min($endPage, $totalPages - 1);
+}
 
 ?>
 <?php include ROOT_PATH . 'dist/pages/parts/head.php' ?>
+
+<style>
+.custom-pagination-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 2rem;
+}
+
+.custom-pagination .pagination {
+    display: inline-flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    background-color: #f8f9fa;
+    padding: 5px;
+    border-radius: 5px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.custom-pagination .page-item {
+    margin: 2px;
+}
+
+.custom-pagination .page-link {
+    border: none;
+    color: #495057;
+    border-radius: 3px;
+    padding: 6px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    min-width: 38px;
+    text-align: center;
+}
+
+.custom-pagination .page-item.active .page-link,
+.custom-pagination .page-link:hover:not(.disabled) {
+    background-color: #007bff;
+    color: #fff;
+}
+
+.custom-pagination .page-item.disabled .page-link {
+    color: #6c757d;
+    pointer-events: none;
+    background-color: #e9ecef;
+}
+
+.pagination-info {
+    margin-top: 1rem;
+    color: #6c757d;
+}
+
+/* 三角形圖示樣式 */
+.triangle-left,
+.triangle-right {
+    width: 0;
+    height: 0;
+    border-top: 8px solid transparent;
+    border-bottom: 8px solid transparent;
+    position: relative;
+    top: 0px; /* 微調三角形位置 */
+}
+
+.triangle-left {
+    border-right: 10px solid #495057;
+}
+
+.triangle-right {
+    border-left: 10px solid #495057;
+}
+
+.page-item:not(.disabled):hover .triangle-left {
+    border-right-color: #fff;
+}
+
+.page-item:not(.disabled):hover .triangle-right {
+    border-left-color: #fff;
+}
+
+.page-item.disabled .triangle-left {
+    border-right-color: #6c757d;
+}
+
+.page-item.disabled .triangle-right {
+    border-left-color: #6c757d;
+}
+
+.prev-page,
+.next-page {
+    padding: 6px 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%; /* 確保高度與其他按鈕一致 */
+}
+</style>
+
 <!--begin::Body-->
 
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
@@ -87,73 +187,62 @@ $rows = $pdo->query($sql)->fetchAll(); # 取得該分頁的文章資料
 
     <div class="col-6"></div>
     <div class="col-6">
-      <form class="d-flex" role="search">
-        <input class="form-control me-2"
-          name="keyword"
-          value="<?= empty($_GET['keyword']) ? '' : htmlentities($_GET['keyword']) ?>"
-          type="search" placeholder="Search" aria-label="Search">
-        <button class="btn btn-outline-success" type="submit">Search</button>
-      </form>
-    </div>
+  <form class="d-flex" role="search" id="searchForm">
+    <input class="form-control me-2"
+      id="searchInput"
+      name="keyword"
+      value="<?= empty($_GET['keyword']) ? '' : htmlentities($_GET['keyword']) ?>"
+      type="search" placeholder="搜尋文章標題、被檢舉人、檢舉人等" aria-label="Search">
+    <button class="btn btn-outline-primary" type="submit">Search</button>
+  </form>
+</div>
   </div>
-  <div class="row mt-2">
+
+<div class="row mt-2">
     <div class="col">
-      <?php
-      $qs = array_filter($_GET); # 去除值是空字串的項目
-      ?>
-      <nav aria-label="Page navigation example">
-        <!-- 讓 pagination 和按鈕都放入 flex 容器內 -->
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <ul class="pagination mb-0">
-            <li class="page-item <?= $page == 1 ? 'disabled' : '' ?>">
-              <a class="page-link" href="?<?php $qs['page'] = 1;
-                                          echo http_build_query($qs) ?>">
-                <i class="fa-solid fa-angles-left"></i>
-              </a>
-            </li>
-            <li class="page-item <?= $page == 1 ? 'disabled' : '' ?>">
-              <a class="page-link" href="?<?php $qs['page'] = $page - 1;
-                                          echo http_build_query($qs) ?>">
-                <i class="fa-solid fa-angle-left"></i>
-              </a>
-            </li>
+            <div class="flex-grow-1 text-center">
+                <nav aria-label="Page navigation" class="custom-pagination">
+                    <ul class="pagination justify-content-center mb-0">
+                        <!-- 分頁按鈕 -->
+                        <li class="page-item <?= $page == 1 ? 'disabled' : '' ?>">
+                            <a class="page-link" href="?<?php $qs['page'] = 1; echo http_build_query($qs); ?>" aria-label="First">
+                                第一頁
+                            </a>
+                        </li>
+                        <li class="page-item <?= $page == 1 ? 'disabled' : '' ?>">
+                            <a class="page-link prev-page" href="?<?php $qs['page'] = max(1, $page - 1); echo http_build_query($qs); ?>" aria-label="Previous">
+                                <span class="triangle-left"></span>
+                            </a>
+                        </li>
 
-            <?php for ($i = $page - 5; $i <= $page + 5; $i++):
-              if ($i >= 1 and $i <= $totalPages):
-                $qs['page'] = $i;
-            ?>
-                <li class="page-item <?= $i == $page ? 'active' : '' ?>">
-                  <a class="page-link" href="?<?= http_build_query($qs) ?>"><?= $i ?></a>
-                </li>
-            <?php endif;
-            endfor; ?>
+                        <?php for ($i = $startPage; $i <= $endPage; $i++): ?>
+                            <li class="page-item <?= $i == $page ? 'active' : '' ?>">
+                                <a class="page-link" href="?<?php $qs['page'] = $i; echo http_build_query($qs); ?>"><?= $i ?></a>
+                            </li>
+                        <?php endfor; ?>
 
-            <li class="page-item <?= $page == $totalPages ? 'disabled' : '' ?>">
-              <a class="page-link" href="?<?php $qs['page'] = $page + 1;
-                                          echo http_build_query($qs) ?>">
-                <i class="fa-solid fa-angle-right"></i>
-              </a>
-            </li>
-            <li class="page-item <?= $page == $totalPages ? 'disabled' : '' ?>">
-              <a class="page-link" href="?<?php $qs['page'] = $totalPages;
-                                          echo http_build_query($qs) ?>">
-                <i class="fa-solid fa-angles-right"></i>
-              </a>
-            </li>
-          </ul>
-
-          <!-- 讓按鈕保持在同一行並對齊右側 -->
-          <div>
-          <div>
-          <a href="/midtern-main/dist/pages/forums/report.php" class="btn btn-primary">貼文檢舉</a>
-          <a href="/midtern-main/dist/pages/forums/report-comment.php" class="btn btn-primary">留言檢舉</a>
-</div>
-
-          </div>
+                        <li class="page-item <?= $page == $totalPages ? 'disabled' : '' ?>">
+                            <a class="page-link next-page" href="?<?php $qs['page'] = min($totalPages, $page + 1); echo http_build_query($qs); ?>" aria-label="Next">
+                                <span class="triangle-right"></span>
+                            </a>
+                        </li>
+                        <li class="page-item <?= $page == $totalPages ? 'disabled' : '' ?>">
+                            <a class="page-link" href="?<?php $qs['page'] = $totalPages; echo http_build_query($qs); ?>" aria-label="Last">
+                                最後一頁
+                            </a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+            <div class="d-flex">
+                <a href="/midtern/dist/pages/forums/report.php" class="btn btn-primary me-2">貼文檢舉</a>
+                <a href="/midtern/dist/pages/forums/report_comment.php" class="btn btn-primary">留言檢舉</a>
+            </div>
         </div>
-      </nav>
     </div>
 </div>
+
 
   <div class="row">
     <div class="col">
@@ -243,7 +332,28 @@ $rows = $pdo->query($sql)->fetchAll(); # 取得該分頁的文章資料
     });
   </script>
   <!--end::OverlayScrollbars Configure-->
+  <script>
+document.addEventListener('DOMContentLoaded', function() {
+  const searchInput = document.getElementById('searchInput');
+  const searchForm = document.getElementById('searchForm');
 
+  if (searchInput && searchForm) {
+    searchInput.addEventListener('search', function(event) {
+      if (this.value === '') {
+        event.preventDefault();
+        window.location.href = 'report.php';
+      }
+    });
+
+    searchForm.addEventListener('submit', function(event) {
+      if (searchInput.value.trim() === '') {
+        event.preventDefault();
+        window.location.href = 'report.php';
+      }
+    });
+  }
+});
+</script>
   <!--end::Script-->
 </body>
 <!--end::Body-->
