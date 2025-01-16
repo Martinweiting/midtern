@@ -41,19 +41,19 @@
           <li class="nav-item">
             <a href="<?= ROOT_URL ?>dist/pages/finance/donations.php" class="nav-link" onclick="return checkPrivilege('donation', this)">
               <i class="nav-icon bi bi-circle"></i>
-              <p>捐款明細</p>
+              <p>捐款管理</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="<?= ROOT_URL ?>dist/pages/finance/incomes.php" class="nav-link" onclick="return checkPrivilege('donation', this)">
+            <a href="<?= ROOT_URL ?>dist/pages/finance/bank.php" class="nav-link" onclick="return checkPrivilege('donation', this)">
               <i class="nav-icon bi bi-circle"></i>
-              <p>收入表</p>
+              <p>對帳管理</p>
             </a>
           </li>
           <li class="nav-item">
             <a href="<?= ROOT_URL ?>dist/pages/finance/expenses.php" class="nav-link" onclick="return checkPrivilege('donation', this)">
               <i class="nav-icon bi bi-circle"></i>
-              <p>支出表</p>
+              <p>支出管理</p>
             </a>
           </li>
         </ul>
@@ -80,9 +80,9 @@
             </a>
           </li>
           <li class="nav-item">
-            <a href="<?= ROOT_URL ?>dist/pages/shop/return.php" class="nav-link" onclick="return checkPrivilege('shop', this)">
+            <a href="<?= ROOT_URL ?>dist/pages/shop/category.php" class="nav-link" onclick="return checkPrivilege('shop', this)">
               <i class="nav-icon bi bi-circle"></i>
-              <p>退貨審核</p>
+              <p>商品類別</p>
             </a>
           </li>
           <li class="nav-item">
@@ -141,13 +141,13 @@
         </a>
         <ul class="nav nav-treeview">
           <li class="nav-item">
-            <a href="<?= ROOT_URL ?>dist/pages/users/user.php" class="nav-link" onclick="return checkPrivilege('member', this)">
+            <a href="<?= ROOT_URL ?>dist/pages/users/Member Center/member_form/members_list.php" class="nav-link" onclick="return checkPrivilege('member', this)">
             <i class="nav-icon bi bi-people"></i>
             <p>會員列表</p>
             </a>
           </li>
           <li class="nav-item">
-            <a href="<?= ROOT_URL ?>dist/pages/admin/admin.php" class="nav-link" onclick="return checkPrivilege('member', this)">
+            <a href="<?= ROOT_URL ?>dist/pages/users/Member Center/manager_list/manager_list.php" class="nav-link" onclick="return checkPrivilege('member', this)">
             <i class="nav-icon bi bi-person"></i>
             <p>管理員列表</p>
             </a>

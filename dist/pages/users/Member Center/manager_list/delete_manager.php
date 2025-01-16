@@ -37,7 +37,7 @@ if (isset($_GET['id'])) {
 require __DIR__ . '/../../../parts/init.php';
 
 // 設定標題和頁面名稱
-$title = "會員列表";
+$title = "管理員列表";
 $pageName = "demo";
 
 // 啟動 Session
@@ -62,7 +62,7 @@ if (!isset($_SESSION['login_session']) || $_SESSION['login_session'] !== true) {
             font-family: Arial, sans-serif;
             background-color: #f4f4f9;
             margin: 0;
-            padding: 20px;
+            
         }
         h1 {
             text-align: center;
